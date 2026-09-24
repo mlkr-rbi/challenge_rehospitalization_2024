@@ -20,9 +20,9 @@ warnings.filterwarnings("ignore")
 from utils import Eval, evaluate_m
 
 c_map = {'MediBoost': '#01b4dd',
-         'SiraćHC': '#f29042',
-          'ZMF': '#d83187',
-           'IMPERIA': '#24195c',
+'SiraćHC': '#f29042',
+'ZMF': '#d83187',
+'IMPERIA': '#24195c',
  'Kronos': '#212529',
  'Baseline': '#bab9bb',
  'ATMC': '#e31a1c',
@@ -79,18 +79,18 @@ class Dataset:
         self.MCC = matthews_corrcoef(self.test['Label'], self.predictions)
         
     def load_data(self):
-        self.df = pd.read_csv("Data/dataset.csv", index_col=0)
-        self.train = pd.read_csv("Challenge Phase2/old/train.csv")
+        self.df = pd.read_csv("C:\\Experiments\\chpkg\\Data\\dataset.csv", index_col=0)
+        self.train = pd.read_csv("C:\\Experiments\\chpkg\\Challenge Phase2\\old\\train.csv")
         self.train.Dx_Secondary = self.train.Dx_Secondary.apply(
                 lambda x: np.array(['missing'])  if type(x
                 ) is float else np.array(x[2:-2].split("' '")))
         
-        self.test = pd.read_csv("Challenge Phase2/test_iid_labels.csv")
+        self.test = pd.read_csv("C:\\Experiments\\chpkg\\Challenge Phase2\\test_iid_labels.csv")
         self.test.Dx_Secondary = self.test.Dx_Secondary.apply(
                 lambda x: np.array(['missing']) if type(x
                 ) is float else np.array(x[2:-2].split("' '")))
         
-        self.ood_test = pd.read_csv("Challenge Phase2/test_ood_labels.csv")
+        self.ood_test = pd.read_csv("C:\\Experiments\\chpkg\\Challenge Phase2\\test_ood_labels.csv")
         self.ood_test.Dx_Secondary = self.ood_test.Dx_Secondary.apply(
                 lambda x: np.array(['missing']) if type(x
                 ) is float else np.array(x[2:-2].split("' '")))

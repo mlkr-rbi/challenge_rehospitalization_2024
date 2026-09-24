@@ -324,38 +324,138 @@ class_distribution_syn
 
 # CHECK UTILITY pMSE
 #===============================================================================
-# check for repeated samples in synthetic train data
-syn_cols <- names(synth.obj_train_over)
-orig_aligned <- orig.df_train[, syn_cols]
-orig_strings <- apply(orig_aligned, 1, paste, collapse = "_")
-syn_strings  <- apply(synth.obj_train_over, 1, paste, collapse = "_")
+# option 1 align to reference
+# align_to_reference <- function(df, ref_df) {
+#   
+#   # align columns using reference dataframe
+#   aligned_df <- df[, names(ref_df), drop = FALSE]
+#   
+#   # convert column types to match reference
+#   for (col in names(ref_df)) {
+#     
+#     if (class(aligned_df[[col]]) != class(ref_df[[col]])) {
+#       
+#       if (is.numeric(ref_df[[col]])) {
+#         aligned_df[[col]] <- as.numeric(aligned_df[[col]])
+#       }
+#       
+#       else if (is.integer(ref_df[[col]])) {
+#         aligned_df[[col]] <- as.integer(aligned_df[[col]])
+#       }
+#       
+#       else if (is.factor(ref_df[[col]])) {
+#         aligned_df[[col]] <- factor(
+#           aligned_df[[col]],
+#           levels = levels(ref_df[[col]])
+#         )
+#       }
+#       
+#       else if (is.character(ref_df[[col]])) {
+#         aligned_df[[col]] <- as.character(aligned_df[[col]])
+#       }
+#       
+#     }
+#   }
+#   
+#   return(aligned_df)
+# }
+# option 2 align to reference
+align_to_reference <- function(df, ref_df) {
+  
+  # 1. Align column order using reference
+  aligned_df <- df[, names(ref_df), drop = FALSE]
+  
+  # 2. Convert character columns to factors (utility.gen prefers factors)
+  aligned_df[] <- lapply(aligned_df, function(x) {
+    if (is.character(x)) factor(x) else x
+  })
+  
+  ref_df[] <- lapply(ref_df, function(x) {
+    if (is.character(x)) factor(x) else x
+  })
+  
+  # 3. Convert column types to match reference
+  for (col in names(ref_df)) {
+    
+    if (!inherits(aligned_df[[col]], class(ref_df[[col]]))) {
+      
+      if (is.numeric(ref_df[[col]])) {
+        aligned_df[[col]] <- as.numeric(aligned_df[[col]])
+      }
+      
+      else if (is.integer(ref_df[[col]])) {
+        aligned_df[[col]] <- as.integer(aligned_df[[col]])
+      }
+      
+      else if (is.factor(ref_df[[col]])) {
+        aligned_df[[col]] <- factor(aligned_df[[col]])
+      }
+      
+      else if (is.character(ref_df[[col]])) {
+        aligned_df[[col]] <- as.character(aligned_df[[col]])
+      }
+    }
+    
+    # 4. Synchronize factor levels
+    if (is.factor(ref_df[[col]]) && is.factor(aligned_df[[col]])) {
+      
+      all_levels <- union(
+        levels(ref_df[[col]]),
+        levels(aligned_df[[col]])
+      )
+      
+      aligned_df[[col]] <- factor(aligned_df[[col]], levels = all_levels)
+      ref_df[[col]]     <- factor(ref_df[[col]], levels = all_levels)
+    }
+  }
+  
+  # 5. Ensure numeric columns are consistent (avoid integer/numeric mismatch)
+  for (col in names(ref_df)) {
+    if (is.numeric(ref_df[[col]])) {
+      aligned_df[[col]] <- as.numeric(aligned_df[[col]])
+    }
+  }
+  
+  return(aligned_df)
+}
 
-# find matches
+# check for repeated samples in synthetic train data
+# train
+train_aligned <- align_to_reference(orig.df_train, synth.obj_train_over)
+orig_strings <- apply(train_aligned, 1, paste, collapse = "_")
+syn_strings  <- apply(synth.obj_train_over, 1, paste, collapse = "_")
 matches <- syn_strings %in% orig_strings
 sum(matches)
 synth.obj_train_over[matches, ]
 
-# check for repeated samples in synthetic test data
-test_aligned <- orig.df_test[, syn_cols]
+# test
+test_aligned <- align_to_reference(orig.df_test, synth.obj_test_over)
 orig_strings_test <- apply(test_aligned, 1, paste, collapse = "_")
 syn_strings_test  <- apply(synth.obj_test_over, 1, paste, collapse = "_")
-
-# find matches
 matches <- syn_strings_test %in% orig_strings_test
 sum(matches)
 synth.obj_train_over[matches, ]
 
 # pMSE utility metric
-utility_result <- utility.gen(
-  object     = synth.obj_train, 
-  data       = orig.df_train,       
+# train
+utility_result_train <- utility.gen(
+  object     = synth.obj_train_over, 
+  data       = train_aligned,       
   print.flag = TRUE
 )
-
-print(utility_result)
+print(utility_result_train)
+train_aligned
+# test
+utility_result_test <- utility.gen(
+  object     = synth.obj_test_over, 
+  data       = test_aligned,       
+  print.flag = TRUE
+)
+print(utility_result_test)
 
 # disclosure risk
-risk <- disclosure(object = synth.obj_train, orig = orig.df_train)
+# train
+risk <- disclosure(object = synth.obj_test_over, orig = train_aligned)
 print(risk)
 
 # KNN nearest samples
@@ -382,17 +482,19 @@ syn_mat  <- model.matrix(~ . -1, data = syn_aligned)
 nn <- get.knnx(orig_mat, syn_mat, k = 1)
 summary(nn$nn.dist)
 
-
 # WRITE
 #===============================================================================
 
-# unbalanced synthetic and original datasets
+# unbalanced synthetic and original data sets
 write.csv(synth.obj_train$syn, "train-synthetic.csv")
 write.csv(orig.df_train, "train-original.csv")
 
 write.csv(synth.obj_test$syn, "test-synthetic.csv")
 write.csv(orig.df_test, "test-original.csv")
 
-# synthetic datasets with oversampling
+# Drop the Label generating columns
+synth.obj_train_over <- synth.obj_train_over[, !(names(synth.obj_train_over) %in% c("NextAdmissionDays", "VISIT_COUNT"))]
+synth.obj_test_over <- synth.obj_test_over[, !(names(synth.obj_test_over) %in% c("NextAdmissionDays", "VISIT_COUNT"))]
+# synthetic data sets with oversampling
 write.csv(synth.obj_train_over, "train-synthetic_over.csv")
 write.csv(synth.obj_test_over, "test-synthetic_over.csv")

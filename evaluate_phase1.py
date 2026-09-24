@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+from pandas import DataFrame
 from sklearn.metrics import matthews_corrcoef
 from sklearn.metrics import f1_score, roc_auc_score, accuracy_score
 from hmeasure import h_score
@@ -44,248 +45,6 @@ TEAMS = {
     "Tim_28": "C tim",
 }
 
-def clean():
-    tim_dirs = ['Tim_{:02d}'.format(i) for i in range(1, 29)] + ['Baseline']
-    for i in tim_dirs:
-        submissions_folder_path="./EDIH_AI4Health_Challenge/" + i 
-        os.makedirs(submissions_folder_path, exist_ok=True)
-        df = pd.DataFrame(columns=["Team", "Date", "Order", 
-                    "H_measure", "MCC", "F1", "ROC_AUC", "Accuracy"
-                ])
-        df.to_csv(submissions_folder_path + '/metrics_public.csv')
-        df.to_csv(submissions_folder_path + '/metrics_private.csv')
-
-
-def reset_metrics_public(root_dir, tim_dir):
-
-    path_public = root_dir / tim_dir / f"/metrics_public.csv"
-    print(path_public)
-    df_public = pd.DataFrame(columns=["Team", "Date", "Order", 
-                    "H_measure", "MCC", "F1", "ROC_AUC", "Accuracy", "fname"
-                ])
-    df_private = pd.DataFrame(columns=["Team", "Date", "Order",
-                    "H_measure", "MCC", "F1", "ROC_AUC", "Accuracy", "fname"
-                ])
-    submissions_folder_path = root_dir / tim_dir / 'Submission'
-    if tim_dir == 'Baseline':
-        submissions_folder_path = root_dir / tim_dir
-    number_list = []
-    items = os.listdir(submissions_folder_path)
-
-    for item in items:
-        if item.endswith('.csv') or item.endswith('.txt'):
-            if item not in [ 'metrics_private.csv',
-                        'metrics_public.csv',
-                        'submission_template.csv', 'Upute-28-02-2024.txt']:
-                try:
-                    number_str = item.split('_')[1]
-                    if item.split('_')[0] == 'Tim':
-                        number_str = item.split('_')[2]
-                    if '.' in number_str:
-                        number_str = number_str.split('.')[0]
-                    number = int(number_str)
-                    eval = Eval(root = root_dir, team_name = tim_dir)
-                    eval.read_data()
-                    print(item, number)
-                    df_public = eval.calc_public_metrics(df_public,
-                                    fname = submissions_folder_path / f"{item}",
-                                    order = number)
-                    df_private = eval.calc_private_metrics(df_private, 
-                                    fname = submissions_folder_path / f"{item}",
-                                    order = number)
-                    print('DF PRIVATE SUCCESSFULLY UPDATED')
-                except ValueError:
-                    pass
-    return df_public, df_private
-
-def clean_mp2(tim):
-    path = Path(f"./Phase 1/EDIH_AI4Health_Challenge/{tim}/metrics_private2.csv")
-    df = pd.read_csv(path)
-    df_original = pd.read_csv(Path(f"./Phase 1/EDIH_AI4Health_Challenge/{tim}/metrics_public.csv"))
-    #keep rows that are in df_original names are in fname column 
-    try:
-        df = df[df['fname'].isin(df_original['fname'])]
-    except:
-        pass
-    df.to_csv(path)
-    
-for tim in os.listdir("./Phase 1/EDIH_AI4Health_Challenge/"):
-    df_public, df_private = reset_metrics_public(Path("./Phase 1/EDIH_AI4Health_Challenge/"), tim)
-    # clean_mp2(tim)
-
-def validation_leaderboard():
-    df_leaderboard = pd.DataFrame(columns=["Team", "Date", "Order", 
-                "H_measure", "MCC", "F1", "ROC_AUC", "Accuracy"])
-    tims = ["Tim_{:02d}".format(i) for i in range(1, 29)] + ["Baseline"]
-    for tim in tims:
-        tim_path=Path("./EDIH_AI4Health_Challenge/"+ tim )
-        df = pd.read_csv(tim_path / 'metrics_public.csv', index_col=0)
-        df_t = df[df['MCC'] == df['MCC'].max()]
-        if len(df_t) > 1:
-            df_t = pd.DataFrame(df_t.iloc[0,:]).T
-        df_leaderboard = pd.concat([df_leaderboard,df_t], axis=0, join='outer', ignore_index=False)
-
-    #drop rows with NaN values
-    df_leaderboard_sorted = df_leaderboard.sort_values(by='MCC', ascending=False)
-    df_leaderboard_sorted['Team'] = df_leaderboard_sorted['Team'].map(TEAMS)
-    df_selected_val = df_leaderboard_sorted[['Team', 'MCC', 'Order']].reset_index(drop=True)
-    df_selected_val['Redni broj'] = df_selected_val.index + 1
-    # make the 'Redni broj' column the first column
-    cols = df_selected_val.columns.tolist()
-    cols = cols[-1:] + cols[:-1]
-    df_selected_val = df_selected_val[cols]
-    df_selected_val.to_html('leaderboard_table.html', index=False)
-    df_selected_val.head(22)
-    return df_selected_val, df_leaderboard_sorted
-
-def final_evaluation():
-    tims_dir = Path("./EDIH_AI4Health_Challenge/")
-    tim_dirs = ['Tim_{:02d}/final'.format(i) for i in range(1, 29)] + ['Baseline']
-
-    for tim in tim_dirs:
-        path_final_private = tims_dir / f"{tim}/metrics_private.csv"
-        print('*'*30, tim, '*'*30)
-        print(path_final_private)
-        items = os.listdir(tims_dir / tim)
-        max_number_file = None
-        for item_name in items:
-            print(item_name)
-            if item_name != 'metrics_private.csv' and item_name:
-                if item_name.split('_')[1] == 0:
-                    pass
-                else:
-                    try:
-                        number_str = item_name.split('_')[1]
-                        if item_name.split('_')[0] == 'Tim':
-                            number_str = item_name.split('_')[2]
-                        if '.' in number_str:
-                            number_str = number_str.split('.')[0]
-                        max_number_file = item_name
-                    except ValueError:
-                        pass
-        tim_path = tims_dir/ f"{tim}"
-        print(f"For the folder: {tim_path}, file is: {max_number_file}")
-        if max_number_file is not None:
-            eval = Eval(root = tims_dir, team_name = tim)
-            eval.read_data() 
-            df_private = pd.DataFrame(columns=["Team", "Date", "Order",
-                            "H_measure", "MCC", "F1", "ROC_AUC", "Accuracy", "fname"])
-            eval.eval_final(df_private, fname = tim_path / f"{max_number_file}")
-        else:
-            pass
-        
-        return df_private
-    
-def plot_submissions(metric = 'MCC'):
-    # Create a 2x2 grid of subplots
-    fig, axs = plt.subplots(2, 1, figsize=(16, 9))
-    tims = ["Tim_{:02d}".format(i) for i in range(1, 29)] + ["Baseline"]
-    # Iterate over the subplots and plot the TEAMS
-    markers = ['o', 'x', 's', 'D', '^', 'v', 'p', 'P', '*', 'X', 'd', ]
-    for i, ax in enumerate(axs.flat):
-        # Get the TEAMS to plot in the current subplot
-        start_index = i * 7
-        end_index = start_index + 7
-        consecutive_tims = tims[start_index:end_index]
-        # Plot the TEAMS in the current subplot
-        for num, team in enumerate(consecutive_tims):
-            tim_path = Path("./EDIH_AI4Health_Challenge/" + team)
-            df = pd.read_csv(tim_path / 'metrics_public.csv', index_col=0)
-            if len(df)>0: 
-                ax.plot(df['Order'], df[metric], label=TEAMS[team], 
-                        marker = markers[num])
-                # set axis y limit to 0.35
-                ax.set_ylim(0, 0.35)
-                ax.set_xlabel("Order")
-                ax.set_ylabel(metric)
-                
-        # plot the baseline line on the subplot
-        df = pd.read_csv(Path("./EDIH_AI4Health_Challenge/Baseline/metrics_public.csv"), index_col=0)
-        baseline = df[metric].max()
-        ax.axhline(y=baseline, color='r', linestyle='--')
-        # add text to the baseline line on the subplot 'baseline'
-        ax.text(6, baseline, 'baseline', color = 'r', fontsize=16, ha='right')
-        # Set the subplot title and labels
-        ax.set_title("Submissions for teams: {} - {}".format(i*7+1, i*7+7))
-        ax.legend()
-        
-    plt.tight_layout()
-    plt.show()
-    
-def final_leaderboard()
-    df_leaderboard = pd.DataFrame(columns=["Team", "Date", "Order", 
-                "H_measure", "MCC", "F1", "ROC_AUC", "Accuracy"])
-    tims = ["Tim_{:02d}/final".format(i) for i in range(1, 29)]
-    for tim in tims:
-        tim_path=Path("./EDIH_AI4Health_Challenge/"+ tim )
-        df = pd.read_csv(tim_path / 'metrics_private.csv', index_col=0)
-        df = df[df['MCC'] == df['MCC'].max()]
-        df_leaderboard = pd.concat([df_leaderboard,df], axis=0, join='outer', ignore_index=False)
-        # df_leaderboard = df_leaderboard.append(df[df['MCC'] == df['MCC'].max()])
-
-    df_leaderboard_sorted = df_leaderboard.sort_values(by='MCC', ascending=False)
-    df_leaderboard_sorted['Team'] = df_leaderboard_sorted['Team'
-                                ].apply(lambda x: x.split('/')[0])
-
-    df_leaderboard_sorted['Team'] = df_leaderboard_sorted['Team'].map(TEAMS)
-    df_selected = df_leaderboard_sorted[['Team', 'MCC', 
-                    'H_measure', "F1", "ROC_AUC"]].reset_index(drop=True)
-
-    df_selected['H_measure'] = df_selected['H_measure'].apply(lambda x: round(x, 4))
-    df_selected['Redni broj'] = df_selected.index + 1
-    # make the 'Redni broj' column the first column
-    cols = df_selected.columns.tolist()
-    cols = cols[-1:] + cols[:-1]
-    df_selected = df_selected[cols]
-    df_selected.to_html('leaderboard_table_final.html', index=False)
-
-    names_sel = df_selected['Team'].values[:11]
-    TEAMS_REV = {v: k for k, v in TEAMS.items()}
-    keep_tim = [TEAMS_REV[i] for i in names_sel]
-    keep_tim
-    # new dict from lists names_sel and keep_tim
-    selected_teams_dic = {keep_tim[i]: names_sel[i] for i in range(len(names_sel))}
-    selected_teams_dic
-    return df_selected
-
-def plot_submissions(metric = 'MCC', df_selected = None):
-    # Create a 2x2 grid of subplots
-    fig, axs = plt.subplots(1, 1, figsize=(16, 9))
-    tims = ["Tim_{:02d}".format(i) for i in range(1, 29)] 
-    # Iterate over the subplots and plot the teams
-    markers = ['o', 'x', 's', 'D', '^', 'v', 'p', 'P', '*', 'X', 'd', ]
-    names = df_selected['Team'].values[:10]
-    # reverse teams dictionary
-    TEAMS_REV = {v: k for k, v in TEAMS.items()}
-        # Get the TEAMS to plot in the current subplot
-    for num, team in enumerate(names):
-        tim_path = Path("./EDIH_AI4Health_Challenge/" + TEAMS_REV[team])
-        df = pd.read_csv(tim_path / 'metrics_public.csv', index_col=0)
-
-        if len(df)>0: 
-            axs.plot(df['Order'], df[metric], label=team, 
-                    marker = markers[num])
-            # set axis y limit to 0.35
-            axs.set_ylim(0, 0.35)
-            # font size of the x and y axis to 24
-            
-            axs.set_xlabel("Order", fontsize=24)
-            axs.set_ylabel(metric, fontsize=24)
-    # plot the baseline line on the subplot
-    df = pd.read_csv(Path("./EDIH_AI4Health_Challenge/Baseline/metrics_public.csv"), index_col=0)
-    baseline = df[metric].max()
-    axs.axhline(y=baseline, color='r', linestyle='--')
-    # add text to the baseline line on the subplot 'baseline'
-    axs.text(6, baseline, 'baseline', color = 'r', fontsize=16, ha='right')
-    # Set the subplot title and labels
-    axs.set_title("Submissions for best score TEAMS", fontsize=24)
-    axs.legend(fontsize=18, loc='upper left')
-    # Adjust the spacing between subplots
-    plt.tight_layout()
-
-    # Show the plot
-    plt.show()
-    
 
 class Eval():
     def __init__(self, root = '', team_name = 'Tim_00') -> None:
@@ -315,10 +74,10 @@ class Eval():
         self.metrics_public = None
         
     def read_data(self):
-        test = pd.read_csv(Path('Challenge synthetic/test-synthetic_over_shuffled.csv'))
+        test = pd.read_csv(Path('C:\\Experiments\\chpkg\\Challenge synthetic\\test-synthetic_over_shuffled.csv'))
         self.testy = test['Label']
         self.val_index = test.sample(3154, random_state=32).index
-        train = pd.read_csv(Path('Challenge synthetic/train.csv'))
+        train = pd.read_csv(Path('C:\\Experiments\\chpkg\\Challenge synthetic\\train.csv'))
         self.trainy = train['Label']
         self.severity_ratio = self.trainy.value_counts(normalize=True)[1]
         self.train = train
@@ -455,9 +214,255 @@ class Eval():
             self.root / f"{self.team_name}/metrics_private.csv", new_metrics_private, fname)
         return self.metrics_private
     
+
+def clean():
+    tim_dirs = ['Tim_{:02d}'.format(i) for i in range(1, 29)] + ['Baseline']
+    for i in tim_dirs:
+        submissions_folder_path="./EDIH_AI4Health_Challenge/" + i 
+        os.makedirs(submissions_folder_path, exist_ok=True)
+        df = pd.DataFrame(columns=["Team", "Date", "Order", 
+                    "H_measure", "MCC", "F1", "ROC_AUC", "Accuracy"
+                ])
+        df.to_csv(submissions_folder_path + '/metrics_public.csv')
+        df.to_csv(submissions_folder_path + '/metrics_private.csv')
+
+
+def reset_metrics_public(root_dir, tim_dir):
+
+    path_public = root_dir / tim_dir / f"/metrics_public.csv"
+    print(path_public)
+    df_public = pd.DataFrame(columns=["Team", "Date", "Order", 
+                    "H_measure", "MCC", "F1", "ROC_AUC", "Accuracy", "fname"
+                ])
+    df_private = pd.DataFrame(columns=["Team", "Date", "Order",
+                    "H_measure", "MCC", "F1", "ROC_AUC", "Accuracy", "fname"
+                ])
+    submissions_folder_path = root_dir / tim_dir / 'Submission'
+    if tim_dir == 'Baseline':
+        submissions_folder_path = root_dir / tim_dir
+    number_list = []
+    items = os.listdir(submissions_folder_path)
+
+    for item in items:
+        if item.endswith('.csv') or item.endswith('.txt'):
+            if item not in [ 'metrics_private.csv',
+                        'metrics_public.csv',
+                        'submission_template.csv', 'Upute-28-02-2024.txt']:
+                try:
+                    if len(item.split('_')) <  2:
+                        continue
+                    number_str = item.split('_')[1]
+                    if item.split('_')[0] == 'Tim':
+                        number_str = item.split('_')[2]
+                    if '.' in number_str:
+                        number_str = number_str.split('.')[0]
+                    number = int(number_str)
+                    eval = Eval(root = root_dir, team_name = tim_dir)
+                    eval.read_data()
+                    print(item, number)
+                    df_public = eval.calc_public_metrics(df_public,
+                                    fname = submissions_folder_path / f"{item}",
+                                    order = number)
+                    df_private = eval.calc_private_metrics(df_private, 
+                                    fname = submissions_folder_path / f"{item}",
+                                    order = number)
+                    print('DF PRIVATE SUCCESSFULLY UPDATED')
+                except ValueError:
+                    pass
+    return df_public, df_private
+
+def clean_mp2(tim):
+    path = Path(f"./task_phase1/EDIH_AI4Health_Challenge/{tim}/metrics_private2.csv")
+    df = pd.read_csv(path)
+    df_original = pd.read_csv(Path(f"./task_phase1/EDIH_AI4Health_Challenge/{tim}/metrics_public.csv"))
+    #keep rows that are in df_original names are in fname column 
+    try:
+        df = df[df['fname'].isin(df_original['fname'])]
+    except:
+        pass
+    df.to_csv(path)
+    
+for tim in os.listdir("./task_phase1/EDIH_AI4Health_Challenge/"):
+    df_public, df_private = reset_metrics_public(Path("./task_phase1/EDIH_AI4Health_Challenge/"), tim)
+    # clean_mp2(tim)
+
+def validation_leaderboard():
+    df_leaderboard = pd.DataFrame(columns=["Team", "Date", "Order", 
+                "H_measure", "MCC", "F1", "ROC_AUC", "Accuracy"])
+    tims = ["Tim_{:02d}".format(i) for i in range(1, 29)] + ["Baseline"]
+    for tim in tims:
+        tim_path=Path("./EDIH_AI4Health_Challenge/"+ tim )
+        df = pd.read_csv(tim_path / 'metrics_public.csv', index_col=0)
+        df_t = df[df['MCC'] == df['MCC'].max()]
+        if len(df_t) > 1:
+            df_t = pd.DataFrame(df_t.iloc[0,:]).T
+        df_leaderboard = pd.concat([df_leaderboard,df_t], axis=0, join='outer', ignore_index=False)
+
+    #drop rows with NaN values
+    df_leaderboard_sorted = df_leaderboard.sort_values(by='MCC', ascending=False)
+    df_leaderboard_sorted['Team'] = df_leaderboard_sorted['Team'].map(TEAMS)
+    df_selected_val = df_leaderboard_sorted[['Team', 'MCC', 'Order']].reset_index(drop=True)
+    df_selected_val['Redni broj'] = df_selected_val.index + 1
+    # make the 'Redni broj' column the first column
+    cols = df_selected_val.columns.tolist()
+    cols = cols[-1:] + cols[:-1]
+    df_selected_val = df_selected_val[cols]
+    df_selected_val.to_html('leaderboard_table.html', index=False)
+    df_selected_val.head(22)
+    return df_selected_val, df_leaderboard_sorted
+
+def final_evaluation():
+    tims_dir = Path("./EDIH_AI4Health_Challenge/")
+    tim_dirs = ['Tim_{:02d}/final'.format(i) for i in range(1, 29)] + ['Baseline']
+
+    for tim in tim_dirs:
+        path_final_private = tims_dir / f"{tim}/metrics_private.csv"
+        print('*'*30, tim, '*'*30)
+        print(path_final_private)
+        items = os.listdir(tims_dir / tim)
+        max_number_file = None
+        for item_name in items:
+            print(item_name)
+            if item_name != 'metrics_private.csv' and item_name:
+                if item_name.split('_')[1] == 0:
+                    pass
+                else:
+                    try:
+                        number_str = item_name.split('_')[1]
+                        if item_name.split('_')[0] == 'Tim':
+                            number_str = item_name.split('_')[2]
+                        if '.' in number_str:
+                            number_str = number_str.split('.')[0]
+                        max_number_file = item_name
+                    except ValueError:
+                        pass
+        tim_path = tims_dir/ f"{tim}"
+        print(f"For the folder: {tim_path}, file is: {max_number_file}")
+        if max_number_file is not None:
+            eval = Eval(root = tims_dir, team_name = tim)
+            eval.read_data() 
+            df_private = pd.DataFrame(columns=["Team", "Date", "Order",
+                            "H_measure", "MCC", "F1", "ROC_AUC", "Accuracy", "fname"])
+            eval.eval_final(df_private, fname = tim_path / f"{max_number_file}")
+        else:
+            pass
+        
+        return df_private
+    
+def plot_submissions(metric = 'MCC'):
+    # Create a 2x2 grid of subplots
+    fig, axs = plt.subplots(2, 1, figsize=(16, 9))
+    tims = ["Tim_{:02d}".format(i) for i in range(1, 29)] + ["Baseline"]
+    # Iterate over the subplots and plot the TEAMS
+    markers = ['o', 'x', 's', 'D', '^', 'v', 'p', 'P', '*', 'X', 'd', ]
+    for i, ax in enumerate(axs.flat):
+        # Get the TEAMS to plot in the current subplot
+        start_index = i * 7
+        end_index = start_index + 7
+        consecutive_tims = tims[start_index:end_index]
+        # Plot the TEAMS in the current subplot
+        for num, team in enumerate(consecutive_tims):
+            tim_path = Path("./EDIH_AI4Health_Challenge/" + team)
+            df = pd.read_csv(tim_path / 'metrics_public.csv', index_col=0)
+            if len(df)>0: 
+                ax.plot(df['Order'], df[metric], label=TEAMS[team], 
+                        marker = markers[num])
+                # set axis y limit to 0.35
+                ax.set_ylim(0, 0.35)
+                ax.set_xlabel("Order")
+                ax.set_ylabel(metric)
+                
+        # plot the baseline line on the subplot
+        df = pd.read_csv(Path("./EDIH_AI4Health_Challenge/Baseline/metrics_public.csv"), index_col=0)
+        baseline = df[metric].max()
+        ax.axhline(y=baseline, color='r', linestyle='--')
+        # add text to the baseline line on the subplot 'baseline'
+        ax.text(6, baseline, 'baseline', color = 'r', fontsize=16, ha='right')
+        # Set the subplot title and labels
+        ax.set_title("Submissions for teams: {} - {}".format(i*7+1, i*7+7))
+        ax.legend()
+        
+    plt.tight_layout()
+    plt.show()
+    
+def final_leaderboard() -> DataFrame:
+    df_leaderboard = pd.DataFrame(columns=["Team", "Date", "Order", 
+                "H_measure", "MCC", "F1", "ROC_AUC", "Accuracy"])
+    tims = ["Tim_{:02d}/final".format(i) for i in range(1, 29)]
+    for tim in tims:
+        tim_path=Path("./EDIH_AI4Health_Challenge/"+ tim )
+        df = pd.read_csv(tim_path / 'metrics_private.csv', index_col=0)
+        df = df[df['MCC'] == df['MCC'].max()]
+        df_leaderboard = pd.concat([df_leaderboard,df], axis=0, join='outer', ignore_index=False)
+        # df_leaderboard = df_leaderboard.append(df[df['MCC'] == df['MCC'].max()])
+
+    df_leaderboard_sorted = df_leaderboard.sort_values(by='MCC', ascending=False)
+    df_leaderboard_sorted['Team'] = df_leaderboard_sorted['Team'
+                                ].apply(lambda x: x.split('/')[0])
+
+    df_leaderboard_sorted['Team'] = df_leaderboard_sorted['Team'].map(TEAMS)
+    df_selected = df_leaderboard_sorted[['Team', 'MCC', 
+                    'H_measure', "F1", "ROC_AUC"]].reset_index(drop=True)
+
+    df_selected['H_measure'] = df_selected['H_measure'].apply(lambda x: round(x, 4))
+    df_selected['Redni broj'] = df_selected.index + 1
+    # make the 'Redni broj' column the first column
+    cols = df_selected.columns.tolist()
+    cols = cols[-1:] + cols[:-1]
+    df_selected = df_selected[cols]
+    df_selected.to_html('leaderboard_table_final.html', index=False)
+
+    names_sel = df_selected['Team'].values[:11]
+    TEAMS_REV = {v: k for k, v in TEAMS.items()}
+    keep_tim = [TEAMS_REV[i] for i in names_sel]
+    keep_tim
+    # new dict from lists names_sel and keep_tim
+    selected_teams_dic = {keep_tim[i]: names_sel[i] for i in range(len(names_sel))}
+    selected_teams_dic
+    return df_selected
+
+def plot_submissions(metric = 'MCC', df_selected = None):
+    # Create a 2x2 grid of subplots
+    fig, axs = plt.subplots(1, 1, figsize=(16, 9))
+    tims = ["Tim_{:02d}".format(i) for i in range(1, 29)] 
+    # Iterate over the subplots and plot the teams
+    markers = ['o', 'x', 's', 'D', '^', 'v', 'p', 'P', '*', 'X', 'd', ]
+    names = df_selected['Team'].values[:10]
+    # reverse teams dictionary
+    TEAMS_REV = {v: k for k, v in TEAMS.items()}
+        # Get the TEAMS to plot in the current subplot
+    for num, team in enumerate(names):
+        tim_path = Path("./EDIH_AI4Health_Challenge/" + TEAMS_REV[team])
+        df = pd.read_csv(tim_path / 'metrics_public.csv', index_col=0)
+
+        if len(df)>0: 
+            axs.plot(df['Order'], df[metric], label=team, 
+                    marker = markers[num])
+            # set axis y limit to 0.35
+            axs.set_ylim(0, 0.35)
+            # font size of the x and y axis to 24
+            
+            axs.set_xlabel("Order", fontsize=24)
+            axs.set_ylabel(metric, fontsize=24)
+    # plot the baseline line on the subplot
+    df = pd.read_csv(Path("./EDIH_AI4Health_Challenge/Baseline/metrics_public.csv"), index_col=0)
+    baseline = df[metric].max()
+    axs.axhline(y=baseline, color='r', linestyle='--')
+    # add text to the baseline line on the subplot 'baseline'
+    axs.text(6, baseline, 'baseline', color = 'r', fontsize=16, ha='right')
+    # Set the subplot title and labels
+    axs.set_title("Submissions for best score TEAMS", fontsize=24)
+    axs.legend(fontsize=18, loc='upper left')
+    # Adjust the spacing between subplots
+    plt.tight_layout()
+
+    # Show the plot
+    plt.show()
+    
+    
 if __name__ == "__main__":
 
-    df_public, df_private = reset_metrics_public(Path("./Phase 1/EDIH_AI4Health_Challenge/"), 'Tim_01')
+    df_public, df_private = reset_metrics_public(Path("./task_phase1/EDIH_AI4Health_Challenge/"), 'Tim_01')
 
     tims_dir = Path("./EDIH_AI4Health_Challenge/")
     tim_dirs = ['Tim_{:02d}'.format(i) for i in range(1, 29)] + ['Baseline']
